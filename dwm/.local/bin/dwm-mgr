@@ -1,0 +1,188 @@
+#!/bin/sh
+
+kill_dwmblocks() {
+    pkill -RTMIN+$1 dwmblocks
+}
+
+get_net_traffic() {
+
+    update() {
+        sum=0
+        for arg; do
+            read -r i < "$arg"
+            sum=$(( sum + i ))
+        done
+        cache=/tmp/${1##*/}
+        [ -f "$cache" ] && read -r old < "$cache" || old=0
+        printf %d\\n "$sum" > "$cache"
+        [ $old -gt 0 ] && printf %d\\n $(( sum - old ))
+    }
+
+    rx=$(update /sys/class/net/[ew]*/statistics/rx_bytes)
+    tx=$(update /sys/class/net/[ew]*/statistics/tx_bytes)
+
+    printf "%4sB %4sB\\n" $(numfmt --to=iec $rx $tx)
+
+}
+
+get_internet_info() {
+
+    if grep -xq 'up' /sys/class/net/w*/operstate 2>/dev/null ; then
+        wifiicon="$(awk '/^\s*w/ { print "直", int(100*$3/70) "% " }' /proc/net/wireless)$(nmcli -f IN-USE,SSID dev wifi | awk '/^\*/{if (NR!=1) {print $2}}')"
+    elif grep -xq 'down' /sys/class/net/w*/operstate 2>/dev/null ; then
+        grep -xq '0x1003' /sys/class/net/w*/flags && wifiicon="ﯳ" || wifiicon="睊"
+    fi
+    printf "%s%s%s\n" "$wifiicon" "$(sed "s/down/ /;s/up/ /;s/unknown/ /" /sys/class/net/e*/operstate 2>/dev/null)" "$(sed "s/.*/ 嬨/" /sys/class/net/tun*/operstate 2>/dev/null)"
+
+}
+
+get_battery_info() {
+
+    for battery in /sys/class/power_supply/BAT?*; do
+        [ -n "${capacity+x}" ] && printf " "
+        capacity="$(cat "$battery/capacity" 2>&1)"
+        case 1 in
+            $((capacity == 100)) ) icon="" ;;
+            $((capacity > 90)) ) icon="" ;;
+            $((capacity > 80)) ) icon="" ;;
+            $((capacity > 70)) ) icon="" ;;
+            $((capacity > 60)) ) icon="" ;;
+            $((capacity > 50)) ) icon="" ;;
+            $((capacity > 40)) ) icon="" ;;
+            $((capacity > 30)) ) icon="" ;;
+            $((capacity > 20)) ) icon="" ;;
+            $((capacity > 10)) ) icon="" ;;
+            * ) icon="" ;;
+        esac
+        is_charging=0
+        case "$(cat "$battery/status" 2>&1)" in
+	    "Full") icon="ﮣ" ;;
+            "Charging") icon="" && is_charging=1;;
+            "Not charging") icon="" ;;
+            "Unknown") icon="" ;;
+        esac
+
+        battery_info="$(upower -i /org/freedesktop/UPower/devices/battery_BAT${battery##*/BAT})"
+        battery_time_info=''
+        time_multiplier=0
+
+        if [ $is_charging -eq 1 ] ; then
+            battery_time_info="$(grep 'time to full' <<< $battery_info)"
+        else
+            battery_time_info="$(grep 'time to empty' <<< $battery_info)"
+        fi
+
+	u=$(awk '{print $5}' <<< $battery_time_info)
+
+	case "$u" in
+            "hours" ) time_multiplier=3600 ;;
+            "minutes" ) time_multiplier=60 ;;
+        esac
+
+	if [ "$time_multiplier" -ne "0" ] ; then
+            t=" $(date -d@$(echo "$(awk '{print $4}' <<< $battery_time_info) $time_multiplier" | awk '{print $1 * $2}' | cut -d. -f1) -u '+%Hh%Mm')"
+	fi
+
+        printf "%s %d%s%s" "$icon" "$capacity" "%" "$t"
+    done && printf "\\n"
+
+}
+
+get_cpu_utilization() {
+
+    cache=/tmp/cpustatcache
+    stats=$(awk '/cpu / {printf "%d %d\n", ($2 + $3 + $4 + $5), $5 }' /proc/stat)
+    [ ! -f $cache ] && echo "$stats" > "$cache"
+    old=$(cat "$cache")
+    t=$(awk '{printf (1-($1-$2)/($3-$4))*100 }' <<< "${stats##* } ${old##* } ${stats%% *} ${old%% *}")
+    printf " %s %.1f%s\\n" "" "$t" "%"
+    echo "$stats" > "$cache"
+
+}
+
+fix_background() {
+
+    feh --bg-fill --no-fehbg ~/Pictures/ml2.png
+    #feh --bg-fill --no-fehbg ~/Pictures/system76.jpg
+
+}
+
+case "$1" in
+
+    vol )
+
+    case "$2" in
+        up ) pulsemixer --change-volume +1 && kill_dwmblocks 5;;
+        down ) pulsemixer --change-volume -1 && kill_dwmblocks 5;;
+        mute ) pulsemixer --toggle-mute && kill_dwmblocks 5;;
+        get ) echo "$(if [ $(pulsemixer --get-mute) -eq 0 ] ; then echo "墳" ; else echo "婢" ; fi) $(pulsemixer --get-volume | cut -d ' ' -f 1)%" ;;
+    esac ;;
+
+    mic )
+
+    sourceId=$(pulsemixer --list-sources | grep -P '(source-\d+)(?=.*Default)' -o)
+
+    case "$2" in
+        up ) pulsemixer --change-volume +1 --id $sourceId && kill_dwmblocks 4;;
+        down ) pulsemixer --change-volume -1 --id $sourceId && kill_dwmblocks 4;;
+        mute ) pulsemixer --toggle-mute --id $sourceId && kill_dwmblocks 4;;
+        get ) echo "$(if [ $(pulsemixer --get-mute --id $sourceId) -eq 0 ] ; then echo "" ; else echo "" ; fi) $(pulsemixer --get-volume --id $sourceId | cut -d ' ' -f 1)%" ;;
+    esac ;;
+
+    mon-soft )
+
+    case "$2" in
+        up ) xrandr --output eDP-1 --brightness $(echo "b=$(xrandr --verbose |grep eDP-1 -A 5 |grep Brightness |grep -o '[0-9].*')+0.1;if(b > 2) print 2 else print b" | bc) ;;
+        down ) xrandr --output eDP-1 --brightness $(echo "b=$(xrandr --verbose |grep eDP-1 -A 5 |grep Brightness |grep -o '[0-9].*')-0.1;if(b < 0) print 0 else print b" | bc) ;;
+    esac ;;
+
+    mon )
+
+    case "$2" in
+        up ) echo $(echo "b=$(cat /sys/class/backlight/intel_backlight/brightness)+480;if(b > 48000) print 48000 else print b" | bc) | sudo tee /sys/class/backlight/intel_backlight/brightness && kill_dwmblocks 6  ;;
+        down ) echo $(echo "b=$(cat /sys/class/backlight/intel_backlight/brightness)-480;if(b < 0) print 0 else print b" | bc) | sudo tee /sys/class/backlight/intel_backlight/brightness && kill_dwmblocks 6 ;;
+        get ) printf "%s %s%s\n" "" $[100*$(cat /sys/class/backlight/intel_backlight/brightness)/48000] "%" ;;
+
+        fhd ) xrandr --output eDP-1 --primary --mode 1920x1080 --pos 0x0 --rotate normal --output DP-1 --off --output DP-2 --off --output HDMI-1 --off && fix_background ;;
+        ext2k ) xrandr --output eDP-1 --primary --mode 1920x1080 --pos 320x1440 --rotate normal --output DP-1 --mode 2560x1440 --pos 0x0 --rotate normal --output HDMI-1 --off --output DP-2 --off --output HDMI-1 --off && fix_background ;;
+    esac ;;
+
+    print-screen )
+
+    case "$2" in
+        all ) scrot ;;
+        sel ) scrot -s ;;
+    esac ;;
+
+    clock )
+
+    case "$2" in
+        get ) date "+ %FT%H:%M:%S %Z" ;;
+    esac ;;
+
+    cpu )
+
+    case "$2" in
+        avg ) get_cpu_utilization ;;
+    esac ;;
+
+    net )
+
+    case "$2" in
+        traf ) get_net_traffic ;;
+        info ) get_internet_info ;;
+    esac ;;
+
+    bat )
+
+    case "$2" in
+        get ) get_battery_info ;;
+    esac ;;
+
+    desktop )
+
+    case "$2" in 
+        bg ) fix_background ;;
+    esac ;;
+
+esac
