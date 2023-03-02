@@ -14,4 +14,4 @@ vim.keymap.set("n", "<ESC>", ":nohlsearch<Bar>:echo<CR>", default_opts)
 vim.keymap.set("n", "<S-h>", ":bprevious<CR>", default_opts)
 vim.keymap.set("n", "<S-l>", ":bnext<CR>", default_opts)
 
-vim.keymap.set("n", "<leader>f", vim.lsp.buf.format)
+vim.keymap.set("n", "<leader>f", (function() vim.lsp.buf.format({timeout_ms = 5000}) end))
