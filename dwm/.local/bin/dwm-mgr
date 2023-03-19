@@ -145,6 +145,8 @@ case "$1" in
 
         fhd ) xrandr --output eDP-1 --primary --mode 1920x1080 --pos 0x0 --rotate normal --output DP-1 --off --output DP-2 --off --output HDMI-1 --off && fix_background ;;
         ext2k ) xrandr --output eDP-1 --primary --mode 1920x1080 --pos 320x1440 --rotate normal --output DP-1 --mode 2560x1440 --pos 0x0 --rotate normal --output HDMI-1 --off --output DP-2 --off --output HDMI-1 --off && fix_background ;;
+        extfhd ) xrandr --output eDP-1 --primary --mode 1920x1080 --pos 0x1080 --rotate normal --output DP-1 --mode 1920x1080 --pos 0x0 --rotate normal --output HDMI-1 --off --output DP-2 --off --output HDMI-1 --off && fix_background ;;
+        # extfhd ) xrandr --output eDP-1 --primary --mode 1920x1080 --pos 0x1080 --rotate normal --output HDMI-1 --mode 1920x1080 --pos 0x0 --rotate normal --output HDMI-1 --off --output DP-2 --off --output HDMI-1 --off && fix_background ;;
     esac ;;
 
     print-screen )
@@ -157,7 +159,7 @@ case "$1" in
     clock )
 
     case "$2" in
-        get ) date "+ %FT%H:%M:%S %Z" ;;
+        get ) echo "$(date '+ %d%bT%H:%M:%S')/$(TZ=EET date '+UA:%H:%M')/$(TZ=Asia/Tokyo date '+JP:%H:%M')" ;;
     esac ;;
 
     cpu )
