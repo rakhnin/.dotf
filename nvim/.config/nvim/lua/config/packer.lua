@@ -63,4 +63,5 @@ return require('packer').startup(function(use)
         --              'nvim-tree/nvim-web-devicons', -- optional, for file icons
         --          },
         --      }
+        use { 'toppair/peek.nvim', run = 'deno task --quiet build:fast' }
     end)
